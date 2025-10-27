@@ -1,72 +1,68 @@
 <?php
-/**
- * Proses Backend Login
- */
+// File: app/process_login.php - Logika pemrosesan login
 
 require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/db.php';
 
-$errors = [];
-$email = '';
+// Pastikan request method adalah POST
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    redirect('login.php');
+}
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+// 1. Verifikasi CSRF Token
+if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+    $_SESSION['error_message'] = "Token Keamanan tidak valid. Coba lagi.";
+    redirect('login.php');
+}
 
-    // 1. Ambil data
-    $email = trim($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
+// Ambil dan sanitasi input
+$email = filter_var($_POST['email'] ?? '', FILTER_SANITIZE_EMAIL);
+$password = $_POST['password'] ?? '';
 
-    // 2. Validasi
-    if (empty($email) || empty($password)) {
-        $errors[] = "Email dan password wajib diisi.";
-    }
+if (empty($email) || empty($password)) {
+    $_SESSION['error_message'] = "Email dan password wajib diisi.";
+    redirect('login.php');
+}
 
-    // 3. Cek ke Database
-    if (empty($errors)) {
-        try {
-            $pdo = getPDO();
-            $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
-            $stmt->execute([$email]);
-            $user = $stmt->fetch();
+try {
+    $pdo = getConnection();
+    
+    // 2. Gunakan Prepared Statement untuk mencegah SQL Injection
+    $stmt = $pdo->prepare("SELECT id, name, password, role FROM users WHERE email = :email");
+    $stmt->bindParam(':email', $email);
+    $stmt->execute();
+    $user = $stmt->fetch();
 
-            // Verifikasi user dan password
-            if ($user && password_verify($password, $user['password'])) {
-                // Login sukses!
-                
-                // Regenerate session ID untuk keamanan
-                session_regenerate_id(true);
+    if ($user) {
+        // 3. Verifikasi Password
+        if (password_verify($password, $user['password'])) {
+            // Login Berhasil
+            $_SESSION['user_id'] = $user['id'];
+            $_SESSION['user_name'] = $user['name'];
+            $_SESSION['user_role'] = $user['role'];
+            $_SESSION['success_message'] = "Selamat datang, " . htmlspecialchars($user['name']) . "! Anda berhasil login.";
 
-                // Simpan data user di session
-                $_SESSION['user_id'] = $user['id'];
-                $_SESSION['user_name'] = $user['name'];
-                $_SESSION['role_id'] = $user['role_id'];
-
-                // Redirect ke dashboard berdasarkan role
-                if ($user['role_id'] == 1) { // 1 = admin
-                    header("Location: ../public/admin/dashboard.php");
-                } else { // user biasa
-                    header("Location: ../public/index.php");
-                }
-                exit();
-
+            // Redirect sesuai role
+            if ($user['role'] === 'admin') {
+                redirect('admin/dashboard.php');
             } else {
-                // User tidak ditemukan atau password salah
-                $errors[] = "Email atau password salah.";
+                redirect('index.php');
             }
-
-        } catch (PDOException $e) {
-            $errors[] = "Error database: " . $e->getMessage();
+        } else {
+            // Password salah
+            $_SESSION['error_message'] = "Email atau password salah.";
+            redirect('login.php');
         }
+    } else {
+        // User tidak ditemukan
+        $_SESSION['error_message'] = "Email atau password salah.";
+        redirect('login.php');
     }
 
-    // 4. Jika ada error, redirect kembali ke login
-    if (!empty($errors)) {
-        $_SESSION['errors'] = $errors;
-        $_SESSION['form_data'] = ['email' => $email];
-        header("Location: ../public/login.php");
-        exit();
-    }
-
-} else {
-    header("Location: ../public/login.php");
-    exit();
+} catch (PDOException $e) {
+    // Log error (sebaiknya di-log ke file, bukan ditampilkan ke user)
+    error_log("Login Error: " . $e->getMessage());
+    $_SESSION['error_message'] = "Terjadi kesalahan sistem. Silakan coba lagi nanti.";
+    redirect('login.php');
 }

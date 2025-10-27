@@ -1,352 +1,126 @@
 <?php
-$page_title = "Manajemen Artikel";
+// File: public/admin/articles.php - Halaman CRUD Artikel (Admin)
 
-require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../../app/auth.php';
+require_once __DIR__ . '/../../app/functions.php';
 require_once __DIR__ . '/../../app/db.php';
 
-// Proteksi halaman, hanya untuk admin
-require_admin();
+// Wajibkan Admin untuk mengakses
+requireAdmin();
 
-// Ambil pesan sukses/error dari session (jika ada)
-$success_message = $_SESSION['success_message'] ?? null;
-$error_message = $_SESSION['error_message'] ?? null;
-unset($_SESSION['success_message'], $_SESSION['error_message']);
+$pdo = getConnection();
+$page_title = "Manajemen Artikel | " . APP_NAME;
+require_once __DIR__ . '/../layout/header.php';
 
-// Ambil semua artikel dari database, gabung (JOIN) dengan nama author
-try {
-    $pdo = getPDO();
-    // Menggunakan LEFT JOIN untuk jaga-jaga jika user author terhapus
-    $stmt = $pdo->query(
-        "SELECT articles.id, articles.title, articles.created_at, users.name AS author_name 
-         FROM articles 
-         LEFT JOIN users ON articles.author_id = users.id 
-         ORDER BY articles.created_at DESC"
-    );
-    $articles = $stmt->fetchAll();
-} catch (PDOException $e) {
-    $error_message = "Gagal mengambil data artikel: " . $e->getMessage();
-    $articles = [];
-}
-
-?>
-
-<div class="bg-white p-8 rounded-lg shadow-md">
-    <div class="flex justify-between items-center mb-6">
-        <h2 class="text-2xl font-bold">Manajemen Artikel</h2>
-        <a href="article_form.php" class="bg-indigo-600 text-white px-4 py-2 rounded-md font-medium hover:bg-indigo-700">
-            + Tambah Artikel Baru
-        </a>
-    </div>
-
-    <?php if ($success_message): ?>
-        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-md mb-6" role="alert">
-            <p><?php echo htmlspecialchars($success_message); ?></p>
-        </div>
-    <?php endif; ?>
-
-    <?php if ($error_message): ?>
-        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md mb-6" role="alert">
-            <p><?php echo htmlspecialchars($error_message); ?></p>
-        </div>
-    <?php endif; ?>
-
-    <div class="overflow-x-auto">
-        <table class="min-w-full bg-white border border-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Judul</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Author</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dibuat Pada</th>
-                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-200">
-                <?php if (empty($articles)): ?>
-                    <tr>
-                        <td colspan="4" class="px-6 py-4 text-center text-gray-500">
-                            Belum ada artikel.
-                        </td>
-                    </tr>
-                <?php else: ?>
-                    <?php foreach ($articles as $article): ?>
-                        <tr>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="text-sm font-medium text-gray-900"><?php echo htmlspecialchars($article['title']); ?></div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="text-sm text-gray-700"><?php echo htmlspecialchars($article['author_name'] ?? 'N/A'); ?></div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="text-sm text-gray-700"><?php echo date('d M Y, H:i', strtotime($article['created_at'])); ?></div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <a href="article_form.php?id=<?php echo $article['id']; ?>" class="text-indigo-600 hover:text-indigo-900">Edit</a>
-                                <span class="text-gray-300 mx-1">|</span>
-                                <a href="../app/process_article.php?action=delete&id=<?php echo $article['id']; ?>" 
-                                   class="text-red-600 hover:text-red-900"
-                                   onclick="return confirm('Apakah Anda yakin ingin menghapus artikel ini?');">
-                                   Hapus
-                                </a>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<?php
-// Panggil footer
-require_once __DIR__ . '/../includes/footer.php';
-?>
-```eof
-
----
-
-### 2. `public/admin/article_form.php` (Formulir 'Create' & 'Update')
-
-File ini pintar. Ia bisa berfungsi sebagai formulir "Tambah Baru" dan "Edit".
-* Jika dibuka (`article_form.php`), ia akan jadi form kosong (Create).
-* Jika dibuka dengan ID (`article_form.php?id=5`), ia akan mengambil data artikel #5 dan mengisi formnya (Update).
-
-```php:article_form.php:public/admin/article_form.php
-<?php
-require_once __DIR__ . '/../includes/header.php'; // Panggil header DULU
-require_once __DIR__ . '/../../app/auth.php';
-require_once __DIR__ . '/../../app/db.php';
-
-// Proteksi halaman
-require_admin();
-
-// Inisialisasi variabel
+// --- Logika Halaman CRUD Sederhana ---
+$action = $_GET['action'] ?? 'list';
 $article_id = $_GET['id'] ?? null;
-$is_edit_mode = ($article_id !== null);
-$page_title = $is_edit_mode ? "Edit Artikel" : "Tambah Artikel Baru";
+$article = [];
 
-$article_title = '';
-$article_content = '';
+try {
+    // Pengambilan data untuk list
+    $articles = getAll('articles');
 
-// Ambil data form dari session jika ada error (saat redirect)
-$form_data = $_SESSION['form_data'] ?? [];
-$article_title = $form_data['title'] ?? '';
-$article_content = $form_data['content'] ?? '';
-unset($_SESSION['form_data']);
-
-// Ambil pesan error jika ada
-$error_message = $_SESSION['error_message'] ?? null;
-unset($_SESSION['error_message']);
-
-// Jika ini mode Edit, ambil data dari DB
-if ($is_edit_mode && empty($form_data)) { // Hanya fetch jika tidak ada form data (bukan redirect error)
-    try {
-        $pdo = getPDO();
-        $stmt = $pdo->prepare("SELECT title, content FROM articles WHERE id = ?");
-        $stmt->execute([$article_id]);
+    // Jika ada aksi edit
+    if ($action === 'edit' && $article_id) {
+        $stmt = $pdo->prepare("SELECT * FROM articles WHERE id = :id");
+        $stmt->bindParam(':id', $article_id);
+        $stmt->execute();
         $article = $stmt->fetch();
-
-        if ($article) {
-            $article_title = $article['title'];
-            $article_content = $article['content'];
-        } else {
-            // Artikel tidak ditemukan, redirect dengan error
+        if (!$article) {
             $_SESSION['error_message'] = "Artikel tidak ditemukan.";
-            header("Location: articles.php");
-            exit();
+            redirect('admin/articles.php');
         }
-    } catch (PDOException $e) {
-        $error_message = "Gagal mengambil data: " . $e->getMessage();
     }
+} catch (PDOException $e) {
+    $_SESSION['error_message'] = "Gagal memuat data: " . $e->getMessage();
+    redirect('admin/dashboard.php');
 }
-
-// Set $page_title di header (karena $page_title ditentukan SETELAH header.php dipanggil)
-// Ini trik untuk update title di template header
-echo "<script>document.title = '" . htmlspecialchars($page_title) . " | Super Web';</script>";
-echo "<script>document.querySelector('header h1').textContent = '" . htmlspecialchars($page_title) . "';</script>";
 
 ?>
 
-<div class="bg-white p-8 rounded-lg shadow-md max-w-3xl mx-auto">
-    
-    <?php if ($error_message): ?>
-        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md mb-6" role="alert">
-            <p><?php echo htmlspecialchars($error_message); ?></p>
+<div class="container mx-auto px-4 py-10">
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 border-b pb-2">Manajemen Artikel</h1>
+
+    <?php if ($action === 'list'): ?>
+        <!-- Tampilan LIST ARTIKEL -->
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-semibold text-gray-700">Daftar Semua Artikel</h2>
+            <a href="?action=create" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg shadow-md transition duration-200">
+                + Tambah Artikel Baru
+            </a>
         </div>
+
+        <div class="bg-white shadow-lg rounded-xl overflow-hidden">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Judul</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Tanggal Buat</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <?php if (empty($articles)): ?>
+                        <tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">Belum ada artikel.</td></tr>
+                    <?php else: ?>
+                        <?php foreach ($articles as $art): ?>
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900"><?= htmlspecialchars($art['title']) ?></td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell"><?= date('d M Y', strtotime($art['created_at'])) ?></td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <a href="?action=edit&id=<?= $art['id'] ?>" class="text-indigo-600 hover:text-indigo-900 mr-3">Edit</a>
+                                    <a href="<?= BASE_URL ?>/app/process_article.php?action=delete&id=<?= $art['id'] ?>&csrf_token=<?= $_SESSION['csrf_token'] ?>" 
+                                       onclick="return confirm('Apakah Anda yakin ingin menghapus artikel ini?')"
+                                       class="text-red-600 hover:text-red-900">Hapus</a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+
+    <?php else: // Aksi CREATE atau EDIT ?>
+        <!-- Tampilan FORM CREATE/EDIT ARTIKEL -->
+        <div class="w-full max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-2xl">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6"><?= $action === 'create' ? 'Buat Artikel Baru' : 'Edit Artikel: ' . htmlspecialchars($article['title'] ?? '') ?></h2>
+            
+            <form action="<?= BASE_URL ?>/app/process_article.php" method="POST">
+                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                <input type="hidden" name="action" value="<?= $action ?>">
+                <?php if ($action === 'edit'): ?>
+                    <input type="hidden" name="id" value="<?= $article_id ?>">
+                <?php endif; ?>
+
+                <div class="mb-4">
+                    <label for="title" class="block text-gray-700 text-sm font-medium mb-2">Judul Artikel</label>
+                    <input type="text" id="title" name="title" required
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                           value="<?= htmlspecialchars($article['title'] ?? '') ?>">
+                </div>
+
+                <div class="mb-6">
+                    <label for="content" class="block text-gray-700 text-sm font-medium mb-2">Konten Artikel</label>
+                    <textarea id="content" name="content" rows="10" required
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              placeholder="Tulis konten artikel di sini..."><?= htmlspecialchars($article['content'] ?? '') ?></textarea>
+                </div>
+
+                <div class="flex space-x-4">
+                    <button type="submit"
+                            class="bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition duration-200 font-semibold shadow-md">
+                        <?= $action === 'create' ? 'Simpan Artikel' : 'Update Artikel' ?>
+                    </button>
+                    <a href="<?= BASE_URL ?>/admin/articles.php"
+                       class="bg-gray-400 text-white py-2 px-4 rounded-lg hover:bg-gray-500 transition duration-200 font-semibold shadow-md">
+                        Batal
+                    </a>
+                </div>
+            </form>
+        </div>
+
     <?php endif; ?>
-
-    <form action="../app/process_article.php" method="POST" class="space-y-6">
-        
-        <?php if ($is_edit_mode): ?>
-            <input type="hidden" name="action" value="update">
-            <input type="hidden" name="id" value="<?php echo htmlspecialchars($article_id); ?>">
-        <?php else: ?>
-            <input type="hidden" name="action" value="create">
-        <?php endif; ?>
-
-        <div>
-            <label for="title" class="block text-sm font-medium leading-6 text-gray-900">Judul Artikel</label>
-            <div class="mt-2">
-                <input id="title" name="title" type="text" required
-                       class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                       value="<?php echo htmlspecialchars($article_title); ?>">
-            </div>
-        </div>
-
-        <div>
-            <label for="content" class="block text-sm font-medium leading-6 text-gray-900">Konten</I</label>
-            <div class="mt-2">
-                <textarea id="content" name="content" rows="10" required
-                          class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                ><?php echo htmlspecialchars($article_content); ?></textarea>
-            </div>
-        </div>
-
-        <div class="flex items-center justify-end gap-x-4">
-            <a href="articles.php" class="text-sm font-semibold leading-6 text-gray-900">Batal</a>
-            <button type="submit"
-                    class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
-                <?php echo $is_edit_mode ? 'Update Artikel' : 'Simpan Artikel'; ?>
-            </button>
-        </div>
-
-    </form>
 </div>
 
-<?php
-// Panggil footer
-require_once __DIR__ . '/../includes/footer.php';
-?>
-```eof
-
----
-
-### 3. `app/process_article.php` (Logika Backend C-U-D)
-
-Ini adalah "dapur"-nya. File ini tidak menampilkan HTML. Ia hanya menerima data, memprosesnya ke database, lalu mengarahkan (redirect) user kembali ke halaman admin.
-
-```php:process_article.php:app/process_article.php
-<?php
-/**
- * Proses Backend CRUD Artikel
- * File ini menangani Create, Update, dan Delete.
- */
-
-require_once __DIR__ . '/../config/config.php';
-require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/auth.php';
-
-// Hanya admin yang boleh mengakses file ini
-require_admin();
-
-// Tentukan PDO
-try {
-    $pdo = getPDO();
-} catch (PDOException $e) {
-    die("Koneksi database gagal: " . $e->getMessage());
-}
-
-// -----------------------------------------------------------------
-// Aksi CREATE (dari method POST)
-// -----------------------------------------------------------------
-if ($_SERVER["REQUEST_METHOD"] == "POST" && $_POST['action'] == 'create') {
-    $title = trim($_POST['title'] ?? '');
-    $content = trim($_POST['content'] ?? '');
-    $author_id = $_SESSION['user_id']; // Ambil ID admin yang sedang login
-
-    // Validasi
-    if (empty($title) || empty($content)) {
-        // Simpan data form dan error ke session, lalu redirect kembali
-        $_SESSION['error_message'] = "Judul dan Konten wajib diisi.";
-        $_SESSION['form_data'] = ['title' => $title, 'content' => $content];
-        header("Location: ../public/admin/article_form.php");
-        exit();
-    }
-
-    // Lolos validasi, masukkan ke database
-    try {
-        $stmt = $pdo->prepare(
-            "INSERT INTO articles (title, content, author_id) VALUES (?, ?, ?)"
-        );
-        $stmt->execute([$title, $content, $author_id]);
-
-        // Set pesan sukses dan redirect
-        $_SESSION['success_message'] = "Artikel baru berhasil ditambahkan!";
-        header("Location: ../public/admin/articles.php");
-        exit();
-
-    } catch (PDOException $e) {
-        $_SESSION['error_message'] = "Database error: " . $e->getMessage();
-        $_SESSION['form_data'] = ['title' => $title, 'content' => $content];
-        header("Location: ../public/admin/article_form.php");
-        exit();
-    }
-}
-
-// -----------------------------------------------------------------
-// Aksi UPDATE (dari method POST)
-// -----------------------------------------------------------------
-if ($_SERVER["REQUEST_METHOD"] == "POST" && $_POST['action'] == 'update') {
-    $id = $_POST['id'] ?? null;
-    $title = trim($_POST['title'] ?? '');
-    $content = trim($_POST['content'] ?? '');
-
-    // Validasi
-    if (empty($id) || empty($title) || empty($content)) {
-        $_SESSION['error_message'] = "Semua field wajib diisi.";
-        $_SESSION['form_data'] = ['title' => $title, 'content' => $content];
-        header("Location: ../public/admin/article_form.php?id=" . $id);
-        exit();
-    }
-
-    // Lolos validasi, update database
-    try {
-        $stmt = $pdo->prepare(
-            "UPDATE articles SET title = ?, content = ? WHERE id = ?"
-        );
-        $stmt->execute([$title, $content, $id]);
-
-        $_SESSION['success_message'] = "Artikel berhasil diperbarui!";
-        header("Location: ../public/admin/articles.php");
-        exit();
-
-    } catch (PDOException $e) {
-        $_SESSION['error_message'] = "Database error: " . $e->getMessage();
-        $_SESSION['form_data'] = ['title' => $title, 'content' => $content];
-        header("Location: ../public/admin/article_form.php?id=" . $id);
-        exit();
-    }
-}
-
-// -----------------------------------------------------------------
-// Aksi DELETE (dari method GET)
-// -----------------------------------------------------------------
-if ($_SERVER["REQUEST_METHOD"] == "GET" && $_GET['action'] == 'delete') {
-    $id = $_GET['id'] ?? null;
-
-    if (empty($id)) {
-        $_SESSION['error_message'] = "ID Artikel tidak valid.";
-        header("Location: ../public/admin/articles.php");
-        exit();
-    }
-
-    // Hapus dari database
-    try {
-        $stmt = $pdo->prepare("DELETE FROM articles WHERE id = ?");
-        $stmt->execute([$id]);
-
-        $_SESSION['success_message'] = "Artikel berhasil dihapus!";
-        header("Location: ../public/admin/articles.php");
-        exit();
-
-    } catch (PDOException $e) {
-        $_SESSION['error_message'] = "Database error: " . $e->getMessage();
-        header("Location: ../public/admin/articles.php");
-        exit();
-    }
-}
-
-// Jika tidak ada aksi yang cocok
-$_SESSION['error_message'] = "Aksi tidak valid.";
-header("Location: ../public/admin/articles.php");
-exit();
+<?php require_once __DIR__ . '/../layout/footer.php'; ?>

@@ -1,84 +1,63 @@
 <?php
-/**
- * Proses Backend Registrasi
- */
+// File: app/process_register.php - Logika pemrosesan pendaftaran akun
 
 require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/db.php';
 
-$errors = [];
-$name = '';
-$email = '';
+// Pastikan request method adalah POST
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    redirect('register.php');
+}
 
-// Hanya proses jika request method-nya POST
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+// 1. Verifikasi CSRF Token
+if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+    $_SESSION['error_message'] = "Token Keamanan tidak valid. Coba lagi.";
+    redirect('register.php');
+}
+
+// Ambil dan sanitasi input
+$name = trim($_POST['name'] ?? '');
+$email = filter_var($_POST['email'] ?? '', FILTER_SANITIZE_EMAIL);
+$password = $_POST['password'] ?? '';
+
+if (empty($name) || empty($email) || empty($password)) {
+    $_SESSION['error_message'] = "Semua field wajib diisi.";
+    redirect('register.php');
+}
+
+if (strlen($password) < 6) {
+    $_SESSION['error_message'] = "Password minimal 6 karakter.";
+    redirect('register.php');
+}
+
+try {
+    $pdo = getConnection();
     
-    // 1. Ambil dan sanitasi data
-    $name = trim($_POST['name'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
-    $confirm_password = $_POST['confirm_password'] ?? '';
+    // Hash password menggunakan BCRYPT
+    $hashed_password = password_hash($password, PASSWORD_BCRYPT);
+    $default_role = 'user'; // Semua pendaftar baru adalah 'user'
 
-    // 2. Validasi
-    if (empty($name)) {
-        $errors[] = "Nama wajib diisi.";
-    }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = "Email tidak valid.";
-    }
-    if (strlen($password) < 8) {
-        $errors[] = "Password minimal 8 karakter.";
-    }
-    if ($password !== $confirm_password) {
-        $errors[] = "Konfirmasi password tidak cocok.";
-    }
+    // 2. Gunakan Prepared Statement untuk INSERT
+    $stmt = $pdo->prepare("INSERT INTO users (name, email, password, role) VALUES (:name, :email, :password, :role)");
+    
+    $stmt->bindParam(':name', $name);
+    $stmt->bindParam(':email', $email);
+    $stmt->bindParam(':password', $hashed_password);
+    $stmt->bindParam(':role', $default_role);
+    
+    $stmt->execute();
 
-    // Cek apakah email sudah terdaftar
-    if (empty($errors)) {
-        try {
-            $pdo = getPDO();
-            $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
-            $stmt->execute([$email]);
-            if ($stmt->fetch()) {
-                $errors[] = "Email sudah terdaftar.";
-            }
-        } catch (PDOException $e) {
-            $errors[] = "Error database: " . $e->getMessage();
-        }
+    $_SESSION['success_message'] = "Pendaftaran berhasil! Silakan login.";
+    redirect('login.php');
+
+} catch (PDOException $e) {
+    // 3. Tangani error duplikat email (code 23000)
+    if ($e->getCode() == 23000) {
+        $_SESSION['error_message'] = "Email ini sudah terdaftar. Silakan gunakan email lain.";
+    } else {
+        error_log("Register Error: " . $e->getMessage());
+        $_SESSION['error_message'] = "Pendaftaran gagal. Terjadi kesalahan sistem.";
     }
-
-    // 3. Proses ke Database jika tidak ada error
-    if (empty($errors)) {
-        try {
-            // Hash password
-            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-            
-            // Default role_id = 2 (user)
-            $default_role_id = 2; 
-
-            $pdo = getPDO();
-            $stmt = $pdo->prepare("INSERT INTO users (name, email, password, role_id) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$name, $email, $hashed_password, $default_role_id]);
-
-            // Registrasi berhasil, redirect ke login
-            $_SESSION['success_message'] = "Registrasi berhasil! Silakan login.";
-            header("Location: ../public/login.php");
-            exit();
-
-        } catch (PDOException $e) {
-            $errors[] = "Gagal mendaftar: " . $e->getMessage();
-        }
-    }
-
-    // 4. Jika ada error, simpan di session dan redirect kembali ke form
-    if (!empty($errors)) {
-        $_SESSION['errors'] = $errors;
-        $_SESSION['form_data'] = ['name' => $name, 'email' => $email];
-        header("Location: ../public/register.php");
-        exit();
-    }
-} else {
-    // Jika bukan POST, redirect
-    header("Location: ../public/register.php");
-    exit();
+    redirect('register.php');
 }

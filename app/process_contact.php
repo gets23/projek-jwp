@@ -1,59 +1,47 @@
 <?php
-/**
- * Proses Backend Formulir Kontak
- */
+// File: app/process_contact.php - Logika pengiriman pesan kontak
 
 require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/db.php';
 
-// Hanya proses jika request method-nya POST
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    redirect('contact.php');
+}
+
+// 1. Verifikasi CSRF Token
+if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+    $_SESSION['error_message'] = "Token Keamanan tidak valid. Coba lagi.";
+    redirect('contact.php');
+}
+
+// Ambil dan sanitasi input
+$name = trim($_POST['name'] ?? '');
+$email = filter_var($_POST['email'] ?? '', FILTER_SANITIZE_EMAIL);
+$message = trim($_POST['message'] ?? '');
+
+if (empty($name) || empty($email) || empty($message)) {
+    $_SESSION['error_message'] = "Semua field wajib diisi.";
+    redirect('contact.php');
+}
+
+try {
+    $pdo = getConnection();
     
-    // 1. Ambil dan sanitasi data
-    $name = trim($_POST['name'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $message = trim($_POST['message'] ?? '');
+    // 2. Gunakan Prepared Statement untuk INSERT
+    $stmt = $pdo->prepare("INSERT INTO contacts (name, email, message) VALUES (:name, :email, :message)");
     
-    $errors = [];
+    $stmt->bindParam(':name', $name);
+    $stmt->bindParam(':email', $email);
+    $stmt->bindParam(':message', $message);
+    
+    $stmt->execute();
 
-    // 2. Validasi
-    if (empty($name)) {
-        $errors[] = "Nama wajib diisi.";
-    }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = "Email tidak valid.";
-    }
-    if (empty($message)) {
-        $errors[] = "Pesan wajib diisi.";
-    }
+    $_SESSION['success_message'] = "Pesan Anda berhasil terkirim! Kami akan segera merespon.";
+    redirect('contact.php');
 
-    // 3. Jika ada error, redirect kembali
-    if (!empty($errors)) {
-        $_SESSION['error_message'] = implode(' ', $errors);
-        $_SESSION['form_data'] = $_POST;
-        header("Location: ../public/contact.php");
-        exit();
-    }
-
-    // 4. Proses ke Database jika tidak ada error
-    try {
-        $pdo = getPDO();
-        $stmt = $pdo->prepare("INSERT INTO contacts (name, email, message) VALUES (?, ?, ?)");
-        $stmt->execute([$name, $email, $message]);
-
-        // Registrasi berhasil, redirect ke login
-        $_SESSION['success_message'] = "Terima kasih! Pesan Anda telah terkirim.";
-        header("Location: ../public/contact.php");
-        exit();
-
-    } catch (PDOException $e) {
-        $_SESSION['error_message'] = "Gagal mengirim pesan: " . $e->getMessage();
-        $_SESSION['form_data'] = $_POST;
-        header("Location: ../public/contact.php");
-        exit();
-    }
-} else {
-    // Jika bukan POST, redirect
-    header("Location: ../public/contact.php");
-    exit();
+} catch (PDOException $e) {
+    error_log("Contact Form Error: " . $e->getMessage());
+    $_SESSION['error_message'] = "Gagal mengirim pesan. Terjadi kesalahan sistem.";
+    redirect('contact.php');
 }
