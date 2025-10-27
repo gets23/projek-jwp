@@ -1,7 +1,7 @@
 <?php
 // File: public/admin/manage_articles.php
 
-require_once __DIR__ . '/../../app/bootstrap.php';
+require_once __DIR__ . '/../app/bootstrap.php';
 
 check_admin(); // Pastikan hanya admin yang bisa akses
 

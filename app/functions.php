@@ -1,4 +1,13 @@
 <?php
+// File: app/functions.php
+
+function check_admin() {
+    if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+        // Bisa arahkan ke login atau halaman lain
+        redirect(BASE_URL . '/login.php?error=Akses ditolak');
+    }
+}
+
 
 // Memulai session jika belum ada
 function start_secure_session() {
