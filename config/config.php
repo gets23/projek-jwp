@@ -1,12 +1,21 @@
 <?php
+/**
+ * File Konfigurasi Database
+ * * Simpan kredensial database kamu di sini.
+ */
 
-// Konfigurasi Database (Gaya Konstanta)
+// Mulai session di setiap halaman
+if (session_status() == PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Pengaturan Database
 define('DB_HOST', '127.0.0.1'); // atau 'localhost'
 define('DB_NAME', 'kuliah_blog');
 define('DB_USER', 'root');
-define('DB_PASS', ''); // Sesuaikan dengan password database Anda
+define('DB_PASS', ''); // Sesuaikan dengan password database kamu
+define('DB_CHARSET', 'utf8mb4');
 
-// Base URL
-// Ganti 'http://localhost' sesuai dengan URL root folder public kamu
-// Contoh: 'http://localhost/public' atau 'http://localhost/project/public'
-define('BASE_URL', 'http://localhost/public');
+// Pengaturan Error Reporting (matikan di produksi)
+error_reporting(E_ALL);
+ini_set('display_errors', 1);

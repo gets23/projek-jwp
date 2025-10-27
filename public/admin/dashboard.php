@@ -1,26 +1,39 @@
 <?php
-require_once __DIR__ . '/../layout/header.php';
-require_once __DIR__ . '/../../app/functions.php';
+$page_title = "Admin Dashboard";
 
-// Proteksi halaman
-require_admin();
+// Panggil header DULU
+require_once __DIR__ . '/../includes/header.php';
+
+// Panggil auth SETELAH header (karena header panggil config/session)
+require_once __DIR__ . '/../../app/auth.php';
+
+// Proteksi halaman ini, hanya untuk admin
+require_admin(); 
 ?>
 
+<!-- Konten Halaman Admin -->
 <div class="bg-white p-8 rounded-lg shadow-md">
-    <h1 class="text-4xl font-bold text-gray-800 mb-6">Admin Dashboard</h1>
-    <p class="text-lg text-gray-600 mb-8">Selamat datang, <?php echo htmlspecialchars($_SESSION['user_name']); ?>. Anda memiliki akses admin.</p>
-    
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <a href="manage_articles.php" class="block bg-blue-500 hover:bg-blue-600 text-white p-6 rounded-lg shadow-md transition duration-200">
-            <h2 class="text-2xl font-bold mb-2">Manajemen Artikel</h2>
-            <p>Tambah, edit, atau hapus artikel blog.</p>
-        </a>
-        <a href="manage_books.php" class="block bg-green-500 hover:bg-green-600 text-white p-6 rounded-lg shadow-md transition duration-200">
-            <h2 class="text-2xl font-bold mb-2">Manajemen Buku</h2>
-            <p>Tambah, edit, atau hapus buku yang dijual.</p>
-        </a>
-        <!-- Bisa ditambahkan link ke manajemen kontak, user, dll. -->
-    </div>
+    <h2 class="text-2xl font-bold mb-4">Admin Dashboard</h2>
+    <p class="text-gray-700">
+        Selamat datang di dashboard admin, <?php echo htmlspecialchars($_SESSION['user_name']); ?>.
+    </p>
+    <p class="mt-4 text-gray-700">
+        Dari sini, Anda akan bisa mengelola:
+    </p>
+    <ul class="list-disc list-inside mt-4 space-y-2 text-gray-700">
+        <li>
+            <a href="articles.php" class="text-indigo-600 hover:underline">Manajemen Artikel</a> (Belum dibuat)
+        </li>
+        <li>
+            <a href="books.php" class="text-indigo-600 hover:underline">Manajemen Buku</a> (Belum dibuat)
+        </li>
+        <li>
+            <a href="role_management.php" class="text-indigo-600 hover:underline">Manajemen Role</a> (Belum dibuat)
+        </li>
+    </ul>
 </div>
 
-<?php require_once __DIR__ . '/../layout/footer.php'; ?>
+<?php
+// Panggil footer
+require_once __DIR__ . '/../includes/footer.php';
+?>
