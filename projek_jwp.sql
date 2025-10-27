@@ -12,10 +12,10 @@ START TRANSACTION;
 SET time_zone = "+00:00";
 
 --
--- Database: `projek_jwp`
+-- Database: `kuliah_blog`
 --
-CREATE DATABASE IF NOT EXISTS `projek_jwp` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-USE `projek_jwp`;
+CREATE DATABASE IF NOT EXISTS `kuliah_blog` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+USE `kuliah_blog`;
 
 -- --------------------------------------------------------
 

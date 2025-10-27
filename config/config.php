@@ -3,7 +3,7 @@
 $servername = "localhost";
 $username   = "root";
 $password   = "";
-$database   = "projek_jwp";
+$database   = "kuliah_blog";
 
 $conn = mysqli_connect($servername, $username, $password, $database);
 
